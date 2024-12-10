@@ -19,11 +19,22 @@ Let's dive into the specifics of each operation:
 */
 trigger AccountTrigger on Account (before insert, after insert) {
 
+    if (Trigger.isBefore && Trigger.isInsert) {
+        AccountHelper.setTypeProspect(Trigger.new);
+        AccountHelper.addressCopy(Trigger.new);
+        AccountHelper.setRating(Trigger.new);
+    }
+    
+    if (Trigger.isAfter && Trigger.isInsert) {
+        AccountHelper.defaultContact(Trigger.new);
+    }
+}
+
     /*
     * Account Trigger
     * When an account is inserted change the account type to 'Prospect' if there is no value in the type field.
     * Trigger should only fire on insert.
-    */
+    
     if (Trigger.isBefore && Trigger.isInsert) {
         for (Account acc : Trigger.new) {
             if (acc.Type == null) {
@@ -32,11 +43,11 @@ trigger AccountTrigger on Account (before insert, after insert) {
         }
     }
 
-    /*
+    
     * Account Trigger
     * When an account is inserted copy the shipping address to the billing address.
     * Trigger should only fire on insert.
-    */
+    
     if (Trigger.isBefore && Trigger.isInsert) {
         for (Account acc : Trigger.new) {
             if (acc.ShippingStreet != null) {
@@ -61,11 +72,11 @@ trigger AccountTrigger on Account (before insert, after insert) {
         }        
     }
 
-    /*
+    
     * Account Trigger
     * When an account is inserted set the rating to 'Hot' if the Phone, Website, and Fax is not empty.
     * Trigger should only fire on insert.
-    */
+    
     if (Trigger.isBefore && Trigger.isInsert) {
         for (Account acc : Trigger.new) {
             if (acc.Phone != null && acc.Website != null && acc.Fax != null) {
@@ -74,13 +85,13 @@ trigger AccountTrigger on Account (before insert, after insert) {
         }
     }
     
-    /*
+    
     * Account Trigger
     * When an account is inserted create a contact related to the account with the following default values:
     * LastName = 'DefaultContact'
     * Email = 'default@email.com'
     * Trigger should only fire on insert.
-    */    
+       
     if(Trigger.isAfter && Trigger.isInsert){     
         List<Contact> contacts = new List<Contact>();   
         for(Account acc : Trigger.new){
@@ -92,4 +103,4 @@ trigger AccountTrigger on Account (before insert, after insert) {
         }
         insert contacts; 
     }
-}
+}*/
