@@ -16,17 +16,33 @@ Stop recursion - 1 instance
 
 RESOURCES: 
 https://www.salesforceben.com/12-salesforce-apex-best-practices/
-https://developer.salesforce.com/blogs/developer-relations/2015/01/apex-best-practices-15-apex-commandments
-*/
+https://developer.salesforce.com/blogs/developer-relations/2015/01/apex-best-practices-15-apex-commandments */
+
 trigger AnotherOpportunityTrigger on Opportunity (before insert, after insert, before update, after update, before delete, after delete, after undelete) {
+    // Placeholder trigger. Logic moved to OpportunityTriggerHandler.
+}
+/*
     if (Trigger.isBefore){
         if (Trigger.isInsert){
             // Set default Type for new Opportunities
-            Opportunity opp = Trigger.new[0];
-            if (opp.Type == null){
-                opp.Type = 'New Customer';
-            }        
-        } else if (Trigger.isDelete){
+            // Bulkify Your Code - 1 instance
+            for(Opportunity opp : Trigger.new){
+                if (opp.Type == null){
+                    opp.Type = 'New Customer';
+                }   
+            }     
+        } else if (Trigger.isUpdate){
+            // Append Stage changes in Opportunity Description
+            // Avoid nested for loop - 1 instance
+            // Stop recursion - 1 instance
+            for (Opportunity opp : Trigger.new){
+                Opportunity oldOpp = Trigger.oldMap.get(opp.Id);
+                    if (oldOpp.StageName != opp.StageName){
+                        opp.Description += '\n Stage Change:' + opp.StageName + ':' + DateTime.now().format();
+                    }                
+            }
+        }
+        else if (Trigger.isDelete){
             // Prevent deletion of closed Opportunities
             for (Opportunity oldOpp : Trigger.old){
                 if (oldOpp.IsClosed){
@@ -39,6 +55,8 @@ trigger AnotherOpportunityTrigger on Opportunity (before insert, after insert, b
     if (Trigger.isAfter){
         if (Trigger.isInsert){
             // Create a new Task for newly inserted Opportunities
+            // Avoid DML inside for loop - 1 instance
+            List<Task> tasks = new List<Task>();
             for (Opportunity opp : Trigger.new){
                 Task tsk = new Task();
                 tsk.Subject = 'Call Primary Contact';
@@ -46,18 +64,12 @@ trigger AnotherOpportunityTrigger on Opportunity (before insert, after insert, b
                 tsk.WhoId = opp.Primary_Contact__c;
                 tsk.OwnerId = opp.OwnerId;
                 tsk.ActivityDate = Date.today().addDays(3);
-                insert tsk;
-            }
+                tasks.add(tsk);
+            }    
+            insert tasks;
+
         } else if (Trigger.isUpdate){
             // Append Stage changes in Opportunity Description
-            for (Opportunity opp : Trigger.new){
-                for (Opportunity oldOpp : Trigger.old){
-                    if (opp.StageName != null){
-                        opp.Description += '\n Stage Change:' + opp.StageName + ':' + DateTime.now().format();
-                    }
-                }                
-            }
-            update Trigger.new;
         }
         // Send email notifications when an Opportunity is deleted 
         else if (Trigger.isDelete){
@@ -69,16 +81,19 @@ trigger AnotherOpportunityTrigger on Opportunity (before insert, after insert, b
         }
     }
 
-    /*
+    
     notifyOwnersOpportunityDeleted:
     - Sends an email notification to the owner of the Opportunity when it gets deleted.
     - Uses Salesforce's Messaging.SingleEmailMessage to send the email.
-    */
+    
+    // Avoid SOQL Query inside for loop - 2 instances
     private static void notifyOwnersOpportunityDeleted(List<Opportunity> opps) {
         List<Messaging.SingleEmailMessage> mails = new List<Messaging.SingleEmailMessage>();
+        Map<Id,User> userMap = new Map<Id,User>([SELECT Id, Email FROM User]);
         for (Opportunity opp : opps){
             Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
-            String[] toAddresses = new String[] {[SELECT Id, Email FROM User WHERE Id = :opp.OwnerId].Email};
+            User oppOwner = userMap.get(opp.OwnerId);
+            String[] toAddresses = new List<String>{ oppOwner.Email };
             mail.setToAddresses(toAddresses);
             mail.setSubject('Opportunity Deleted : ' + opp.Name);
             mail.setPlainTextBody('Your Opportunity: ' + opp.Name +' has been deleted.');
@@ -92,21 +107,31 @@ trigger AnotherOpportunityTrigger on Opportunity (before insert, after insert, b
         }
     }
 
-    /*
+    
     assignPrimaryContact:
     - Assigns a primary contact with the title of 'VP Sales' to undeleted Opportunities.
     - Only updates the Opportunities that don't already have a primary contact.
-    */
+    
+    // Avoid SOQL Query inside for loop - 2 instances
     private static void assignPrimaryContact(Map<Id,Opportunity> oppNewMap) {        
         Map<Id, Opportunity> oppMap = new Map<Id, Opportunity>();
-        for (Opportunity opp : oppNewMap.values()){            
-            Contact primaryContact = [SELECT Id, AccountId FROM Contact WHERE Title = 'VP Sales' AND AccountId = :opp.AccountId LIMIT 1];
+        Set<Id> oppAccountIds = new Set<Id>();
+        for (Opportunity opp : oppNewMap.values()){    
+            oppAccountIds.add(opp.AccountId);
+        }            
+        List<Contact> primaryContacts = [SELECT Id, AccountId FROM Contact WHERE Title = 'VP Sales' AND AccountId IN :oppAccountIds];
+        Map<Id, Contact> accountIdToContactMap = new Map<Id, Contact>();
+        for(Contact cont : primaryContacts){
+            accountIdToContactMap.put(cont.AccountId, cont);
+        }    
+        for(Opportunity opp : oppNewMap.values()){    
             if (opp.Primary_Contact__c == null){
                 Opportunity oppToUpdate = new Opportunity(Id = opp.Id);
+                Contact primaryContact = accountIdToContactMap.get(opp.AccountId);
                 oppToUpdate.Primary_Contact__c = primaryContact.Id;
                 oppMap.put(opp.Id, oppToUpdate);
             }
         }
         update oppMap.values();
     }
-}
+}*/
